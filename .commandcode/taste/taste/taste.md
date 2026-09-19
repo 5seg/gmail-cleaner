@@ -1,0 +1,7 @@
+# Taste
+- Writes in Japanese and expects responses to match (conversation, code comments, and summaries in Japanese); explicitly asks for Japanese when responses slip into another language. Confidence: 0.85
+- Dislikes verbose streaming output ("too much information, can't tell what got deleted vs kept"); prefers concise progress output during processing, then a compact end-of-run summary table listing items by number (e.g. title/index only), with full details shown on demand when a number is entered. Confidence: 0.8
+- Prefers an interactive TUI over plain console output: actions triggered by keys (e.g. a key to run judgment), and a table view whose rows show an icon with a probability percentage, the title, and extra info (sender/age), with keyboard navigation. Confidence: 0.75
+- Pragmatic about debugging: once the root cause is found, don't dwell on a specific symptom number — just fix it and move on. Confidence: 0.6
+- Expects responsive UI feedback: long-running operations (loading, judging, moving to trash) need visible progress (e.g. a progress bar with n/N) so it's clear how far along they are, and the displayed state (e.g. the list) must refresh immediately after an action instead of showing stale data. Confidence: 0.7
+- Wants human-in-the-loop control over automated decisions: prefers to manually decide/override each item's outcome (e.g. keep vs delete) rather than rely solely on automatic judgment, with manual choices taking priority and clearly distinguished from the automatic ones. Confidence: 0.65
