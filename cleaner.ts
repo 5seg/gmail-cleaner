@@ -5,6 +5,22 @@ import path from "node:path";
 
 const CREDENTIALS_PATH = path.join(import.meta.dir, "credential.json");
 const TOKEN_PATH = path.join(import.meta.dir, "token.json");
+const DECISIONS_PATH = path.join(import.meta.dir, "decisions.json");
+
+export type Decision = "keep" | "delete";
+
+/** Manual keep/delete marks, persisted across runs and keyed by Gmail message id. */
+export async function loadDecisions(): Promise<Record<string, Decision>> {
+  try {
+    return JSON.parse(await fs.readFile(DECISIONS_PATH, "utf-8"));
+  } catch {
+    return {};
+  }
+}
+
+export async function saveDecisions(decisions: Record<string, Decision>): Promise<void> {
+  await fs.writeFile(DECISIONS_PATH, JSON.stringify(decisions, null, 2), "utf-8");
+}
 
 // Age thresholds (days) per time_sensitivity category
 export const AGE_THRESHOLDS: Record<string, number | null> = {

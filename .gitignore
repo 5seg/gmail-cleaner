@@ -24,6 +24,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 credential.json
 credentials.json
 token.json
+decisions.json
 
 # caches
 .eslintcache

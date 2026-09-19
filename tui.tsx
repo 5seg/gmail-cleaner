@@ -5,8 +5,11 @@ import {
   getGmailClient,
   getJevClient,
   judgeAll,
+  loadDecisions,
   loadEmails,
+  saveDecisions,
   trashMessages,
+  type Decision,
   type Gmail,
   type Jev,
   type JudgedEmail,
@@ -99,12 +102,14 @@ export function App({ query, limit }: { query: string; limit: number }) {
 
   const gmailRef = useRef<Gmail | null>(null);
   const jevRef = useRef<Jev | null>(null);
+  const decisionsRef = useRef<Record<string, Decision>>({});
 
   useEffect(() => {
     void (async () => {
       try {
         const gmail = await getGmailClient();
         gmailRef.current = gmail;
+        decisionsRef.current = await loadDecisions();
         const ids = await fetchMessages(gmail, query, limit);
 
         if (ids.length === 0) {
@@ -114,7 +119,15 @@ export function App({ query, limit }: { query: string; limit: number }) {
         }
 
         setEmails(
-          ids.map((id) => ({ id, from: "", subject: "読み込み中…", date: "", ageDays: 0, snippet: "" }))
+          ids.map((id) => ({
+            id,
+            from: "",
+            subject: "読み込み中…",
+            date: "",
+            ageDays: 0,
+            snippet: "",
+            manual: decisionsRef.current[id],
+          }))
         );
         setProgress({ done: 0, total: ids.length });
         setPhase("loading");
@@ -122,7 +135,7 @@ export function App({ query, limit }: { query: string; limit: number }) {
         await loadEmails(gmail, ids, 8, (i, item) => {
           setEmails((prev) => {
             const next = prev.slice();
-            next[i] = item;
+            next[i] = { ...item, manual: decisionsRef.current[item.id] };
             return next;
           });
           setProgress((p) => ({ ...p, done: p.done + 1 }));
@@ -137,28 +150,106 @@ export function App({ query, limit }: { query: string; limit: number }) {
   }, []);
 
   const startJudge = () => {
-    if (phase !== "ready" || emails.length === 0) return;
+    if (phase !== "ready" && phase !== "done") return;
+
+    // Only judge what has not been judged yet, so refreshed-in mail can be
+    // processed without re-running (and overwriting) existing verdicts.
+    const targets = emails
+      .map((item, index) => ({ item, index }))
+      .filter(({ item }) => !item.verdict);
+
+    if (targets.length === 0) {
+      setStatus("未判定のメールはありません");
+      return;
+    }
+
     const jev = jevRef.current ?? (jevRef.current = getJevClient());
-    const snapshot = emails;
+    const indices = targets.map((t) => t.index);
     setPhase("judging");
     setStatus("");
-    setProgress({ done: 0, total: snapshot.length });
-    void judgeAll(jev, snapshot, 5, (i, verdict) => {
-      setEmails((prev) => {
-        const next = prev.slice();
-        next[i] = { ...next[i]!, verdict };
-        return next;
+    setProgress({ done: 0, total: targets.length });
+
+    void judgeAll(
+      jev,
+      targets.map((t) => t.item),
+      5,
+      (i, verdict) => {
+        const index = indices[i];
+        if (index === undefined) return;
+        setEmails((prev) => {
+          const next = prev.slice();
+          next[index] = { ...next[index]!, verdict };
+          return next;
+        });
+        setProgress((p) => ({ ...p, done: p.done + 1 }));
+      }
+    ).then(() => setPhase("done"));
+  };
+
+  const refresh = async () => {
+    if (phase !== "ready" && phase !== "done") return;
+    const gmail = gmailRef.current;
+    if (!gmail) return;
+
+    const hadVerdicts = emails.some((e) => e.verdict);
+    const restore = () => setPhase(hadVerdicts ? "done" : "ready");
+
+    setStatus("");
+    setPhase("loading");
+    setProgress({ done: 0, total: 0 });
+
+    try {
+      const fetched = await fetchMessages(gmail, query, limit);
+      const known = new Set(emails.map((e) => e.id));
+      const newIds = fetched.filter((id) => !known.has(id));
+
+      if (newIds.length === 0) {
+        restore();
+        setStatus("新しいメールはありません");
+        return;
+      }
+
+      setEmails((prev) => [
+        ...newIds.map((id) => ({
+          id,
+          from: "",
+          subject: "読み込み中…",
+          date: "",
+          ageDays: 0,
+          snippet: "",
+          manual: decisionsRef.current[id],
+        })),
+        ...prev,
+      ]);
+      setView({ cursor: 0, offset: 0 });
+      setProgress({ done: 0, total: newIds.length });
+
+      await loadEmails(gmail, newIds, 8, (i, item) => {
+        setEmails((prev) => {
+          const next = prev.slice();
+          next[i] = { ...item, manual: decisionsRef.current[item.id] };
+          return next;
+        });
+        setProgress((p) => ({ ...p, done: p.done + 1 }));
       });
-      setProgress((p) => ({ ...p, done: p.done + 1 }));
-    }).then(() => setPhase("done"));
+
+      restore();
+      setStatus(`${newIds.length}件の新着メールを取得しました`);
+    } catch (e) {
+      restore();
+      setStatus(`取得エラー: ${(e as Error).message}`);
+    }
   };
 
   const toggleMark = () => {
+    const current = emails[view.cursor];
+    if (!current) return;
+    const manual: Decision = isDeleteMarked(current) ? "keep" : "delete";
+    decisionsRef.current[current.id] = manual;
+    void saveDecisions(decisionsRef.current);
     setEmails((prev) => {
-      const current = prev[view.cursor];
-      if (!current) return prev;
       const next = prev.slice();
-      next[view.cursor] = { ...current, manual: isDeleteMarked(current) ? "keep" : "delete" };
+      next[view.cursor] = { ...current, manual };
       return next;
     });
   };
@@ -237,7 +328,8 @@ export function App({ query, limit }: { query: string; limit: number }) {
         offset: Math.max(0, emails.length - viewport),
       });
     else if (input === "x" || input === " ") toggleMark();
-    else if ((key.return || input === "a") && phase === "ready") startJudge();
+    else if (input === "r") void refresh();
+    else if (key.return || input === "a") startJudge();
     else if (input === "d") {
       const n = emails.filter(isDeleteMarked).length;
       if (n > 0) {
@@ -275,9 +367,9 @@ export function App({ query, limit }: { query: string; limit: number }) {
   const hint = confirm
     ? "y: 実行 / その他のキー: キャンセル"
     : phase === "ready"
-      ? "↑↓ / k j: 移動  x: 残す/消す切替  Enter: 全件判定  q: 終了"
+      ? "↑↓ / k j: 移動  x: 残す/消す切替  r: 再取得  Enter: 判定  q: 終了"
       : phase === "done"
-        ? "↑↓ / k j: 移動  x: 残す/消す切替  d: 削除実行  q: 終了"
+        ? "↑↓ / k j: 移動  x: 残す/消す切替  r: 再取得  Enter: 未判定を判定  d: 削除実行  q: 終了"
         : "処理中… (q: 終了)";
 
   const visible = emails.slice(view.offset, view.offset + viewport);

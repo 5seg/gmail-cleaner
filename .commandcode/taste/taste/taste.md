@@ -5,3 +5,5 @@
 - Pragmatic about debugging: once the root cause is found, don't dwell on a specific symptom number — just fix it and move on. Confidence: 0.6
 - Expects responsive UI feedback: long-running operations (loading, judging, moving to trash) need visible progress (e.g. a progress bar with n/N) so it's clear how far along they are, and the displayed state (e.g. the list) must refresh immediately after an action instead of showing stale data. Confidence: 0.7
 - Wants human-in-the-loop control over automated decisions: prefers to manually decide/override each item's outcome (e.g. keep vs delete) rather than rely solely on automatic judgment, with manual choices taking priority and clearly distinguished from the automatic ones. Confidence: 0.65
+- Expects long-running interactive apps to refresh/re-fetch data in place without restarting, preserving existing in-progress state (e.g. prior judgments and manual marks) rather than losing it. Confidence: 0.6
+- Wants user-made decisions to persist across app restarts (saved to local storage and reloaded/keyed by a stable id on startup), not just within a session. Confidence: 0.7
