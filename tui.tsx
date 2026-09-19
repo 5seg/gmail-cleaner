@@ -199,9 +199,8 @@ export function App({ query, limit }: { query: string; limit: number }) {
     setProgress({ done: 0, total: 0 });
 
     try {
-      const fetched = await fetchMessages(gmail, query, limit);
       const known = new Set(emails.map((e) => e.id));
-      const newIds = fetched.filter((id) => !known.has(id));
+      const newIds = await fetchMessages(gmail, query, limit, known);
 
       if (newIds.length === 0) {
         restore();
@@ -234,7 +233,9 @@ export function App({ query, limit }: { query: string; limit: number }) {
       });
 
       restore();
-      setStatus(`${newIds.length}件の新着メールを取得しました`);
+      setStatus(
+        `${newIds.length}件を追加取得しました（表示中 ${emails.length + newIds.length}件）`
+      );
     } catch (e) {
       restore();
       setStatus(`取得エラー: ${(e as Error).message}`);

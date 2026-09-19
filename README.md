@@ -29,7 +29,7 @@ bun run start
 bun run index.ts --limit=100 --query="in:inbox older_than:1y"
 ```
 
-- `--limit` 取得する最大件数（既定 50、`nextPageToken` を辿って複数ページ取得）
+- `--limit` 1回の取得件数（既定 50）。`r` で再取得すると、既知のメールは飛ばして**続きから同じ件数**を追加します（保持メールが増えても先へ進めます）
 - `--query` Gmail 検索クエリ（既定 `in:inbox`）
   - 例: `older_than:1y`, `category:promotions OR category:updates`, `is:unread`
 

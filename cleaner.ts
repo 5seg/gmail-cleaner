@@ -84,10 +84,17 @@ export function getJevClient() {
   return new TypeSafeClient({ apiKey });
 }
 
+/**
+ * Returns up to `limit` message ids, paging through the query until it has
+ * collected that many *unseen* ones. Ids present in `exclude` are skipped, so a
+ * refresh continues past the messages already loaded instead of stopping at the
+ * first page.
+ */
 export async function fetchMessages(
   gmail: Gmail,
   query: string,
-  limit: number
+  limit: number,
+  exclude?: Set<string>
 ): Promise<string[]> {
   const ids: string[] = [];
   let pageToken: string | undefined;
@@ -96,14 +103,18 @@ export async function fetchMessages(
     const res = await gmail.users.messages.list({
       userId: "me",
       q: query,
-      maxResults: Math.min(500, limit - ids.length),
+      maxResults: 500,
       pageToken,
     });
 
     const batch = res.data.messages ?? [];
-    for (const m of batch) if (m.id) ids.push(m.id);
-    pageToken = res.data.nextPageToken ?? undefined;
+    for (const m of batch) {
+      if (!m.id || exclude?.has(m.id)) continue;
+      ids.push(m.id);
+      if (ids.length >= limit) break;
+    }
 
+    pageToken = res.data.nextPageToken ?? undefined;
     if (!pageToken || batch.length === 0) break;
   }
 
